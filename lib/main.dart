@@ -1,27 +1,62 @@
 import 'package:english_words/english_words.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-void main() {
-  runApp(const MyApp());
+final titleProvider = Provider((_) => 'Startup Namer Generator');
+final savedItemsProvider =
+    StateNotifierProvider<SavedItems, Set<WordPair>>((ref) {
+  return SavedItems(ref);
+});
+final itemsProvider = Provider((ref) => <WordPair>{});
+
+class SavedItems extends StateNotifier<Set<WordPair>> {
+  SavedItems(this.ref) : super({});
+
+  final Ref ref;
+
+  void save(WordPair pair) {
+    final items = ref.read(itemsProvider);
+    items.add(pair);
+  }
+
+  void remove(WordPair pair) {
+    final items = ref.read(itemsProvider);
+    items.remove(pair);
+  }
 }
 
-class RandomWords extends StatefulWidget {
+void main() {
+  runApp(
+    const ProviderScope(
+      child: MyApp(),
+    ),
+  );
+}
+
+class RandomWords extends ConsumerStatefulWidget {
   const RandomWords({Key? key}) : super(key: key);
 
   @override
   _RandomWordsState createState() => _RandomWordsState();
 }
 
-class _RandomWordsState extends State<RandomWords> {
+class _RandomWordsState extends ConsumerState<RandomWords> {
   final _suggestions = <WordPair>[];
-  final _saved = <WordPair>{};
   final _biggerFont = const TextStyle(fontSize: 18);
 
+  @override
+  void initState() {
+    super.initState();
+    ref.read(savedItemsProvider);
+  }
+
   void _pushSaved() {
+    final saved = ref.watch(itemsProvider);
+
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) {
-          final tiles = _saved.map(
+          final tiles = saved.map(
             (pair) {
               return ListTile(
                 title: Text(
@@ -46,7 +81,7 @@ class _RandomWordsState extends State<RandomWords> {
     );
   }
 
-  Widget _buildSuggestions() {
+  Widget _buildSuggestions(WidgetRef ref) {
     return ListView.builder(
         padding: const EdgeInsets.all(16),
         itemBuilder: (context, i) {
@@ -57,12 +92,13 @@ class _RandomWordsState extends State<RandomWords> {
           if (index >= _suggestions.length) {
             _suggestions.addAll(generateWordPairs().take(10));
           }
-          return _buildRow(_suggestions[index]);
+          return _buildRow(_suggestions[index], ref);
         });
   }
 
-  Widget _buildRow(WordPair pair) {
-    final alreadySaved = _saved.contains(pair);
+  Widget _buildRow(WordPair pair, WidgetRef ref) {
+    final alreadySaved = ref.watch(itemsProvider).contains(pair);
+
     return ListTile(
         title: Text(
           pair.asPascalCase,
@@ -76,9 +112,9 @@ class _RandomWordsState extends State<RandomWords> {
         onTap: () {
           setState(() {
             if (alreadySaved) {
-              _saved.remove(pair);
+              ref.read(savedItemsProvider.notifier).remove(pair);
             } else {
-              _saved.add(pair);
+              ref.read(savedItemsProvider.notifier).save(pair);
             }
           });
         });
@@ -94,17 +130,19 @@ class _RandomWordsState extends State<RandomWords> {
             tooltip: 'Saved Suggestions',
           )
         ]),
-        body: _buildSuggestions());
+        body: _buildSuggestions(ref));
   }
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final String value = ref.watch(titleProvider);
+
     return MaterialApp(
-      title: 'Startup Namer Generator',
+      title: value,
       theme: ThemeData(
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
